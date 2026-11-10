@@ -21,8 +21,6 @@ def derive_dm(dm_raw, ds_raw, ec_raw):
     dm["SUBJID"] = dm_raw["PATNUM"].str.split("-").str[1]
     dm["SITEID"] = dm_raw["PATNUM"].str.split("-").str[0]
 
-    # Passo 1 - TODO: AGE, AGEU, SEX, RACE, ETHNIC, COUNTRY,
-    #                 ARMCD, ARM, ACTARMCD, ACTARM, ARMNRS, ACTARMUD
     # Copia colonna it.age in colonna age
     dm["AGE"] = dm_raw["IT.AGE"]
     # crea una colonna uguale con le stesse informazioni ma con l'unità di misura "YEARS"
@@ -54,8 +52,6 @@ def derive_dm(dm_raw, ds_raw, ec_raw):
     # è sempre vuota
     dm["ACTARMUD"] = None
     
-
-    # Passo 2 - TODO: DMDTC, RFICDTC, BRTHDTC
     
     # calcolo della data di raccolta dei dati demografici a partire dalla colonna COL_DT del file dm_raw
     dm["DMDTC"] = a_iso(dm_raw["COL_DT"], "%m/%d/%Y")
@@ -69,9 +65,6 @@ def derive_dm(dm_raw, ds_raw, ec_raw):
         for c, a in zip(col, dm_raw["IT.AGE"])]
 
 
-
-    # Passo 3 - TODO: RFXSTDTC, RFXENDTC, RFSTDTC (da ec_raw)
-
     #In dm_raw ogni soggetto ha una riga, in ec_raw ne ha tante, una per ogni periodo di somministrazione.
     #Per esempio, il soggetto 701-1015 nei dati:
     #PATNUM    VISITNAME  IT.ECSTDAT   IT.ECENDAT
@@ -81,7 +74,7 @@ def derive_dm(dm_raw, ds_raw, ec_raw):
     #Ma in DM ci va una sola data di prima dose e una sola di ultima dose:
     #              min(IT.ECSTDAT)        max(IT.ECENDAT)
     #701-1015  ──►  RFXSTDTC 2014-01-02    RFXENDTC 2014-07-02
-    #Si fa in tre mosse:
+    #Si fa in tre step:
     #Trasforma il testo in data vera. Il minimo di un testo è in ordine alfabetico (02-Jan < 16-Feb < 17-Jan),
     #non di calendario.
     #groupby("PATNUM") + .min(): raggruppa le righe di ogni soggetto e ne tiene la data più piccola.
@@ -100,8 +93,6 @@ def derive_dm(dm_raw, ds_raw, ec_raw):
 
     # copia RFSTDTC perchè in questo studio coincide con RFXSTDTC
     dm["RFSTDTC"] = dm["RFXSTDTC"]
-
-    # Passo 4 - TODO: DTHDTC, DTHFL, RFPENDTC (da ds_raw)
 
     # DEATHDT è ripetuta uguale su tutte le righe di chi è morto ed è vuota per gli altri
         # tiene solo la prima data di morte per soggetto, se esiste, e la converte in formato ISO 8601
@@ -124,7 +115,6 @@ def derive_dm(dm_raw, ds_raw, ec_raw):
     dm["RFPENDTC"] = dm_raw["PATNUM"].map(fine)
 
 
-    # Passo 5 - TODO: DMDY
     #'DMDY è il numero di giorni trascorsi tra la data di raccolta dei dati demografici e la data di screening.'
     #prima dose; il giorno 0 non esiste
     #'DMDY si calcola come la differenza tra DMDTC e RFSTDTC, espressa in giorni.'
@@ -134,12 +124,9 @@ def derive_dm(dm_raw, ds_raw, ec_raw):
     dm["DMDY"] = (pd.to_datetime(dm["DMDTC"]) - pd.to_datetime(dm["RFSTDTC"])).dt.days
     dm["DMDY"] = dm["DMDY"].where(dm["DMDY"] < 0, dm["DMDY"] + 1).astype("Int64")
     # se DMDTC o RFSTDTC sono vuoti, DMDY è vuoto. dm["DMDY"] = giorni.where(CONDIZIONE, ALTRIMENTI).astype("Int64")
-    #Si legge “tieni il valore dove la condizione è vera, altrimenti metti quest’altro”:
-    
-    # Passo 6 - TODO: RFENDTC
-    
+
     # ds_raw contiene tutte le righe di tutti i soggetti,
-    #  ma a noi serve solo la riga che indica la fine della partecipazione alla parte di trattamento.
+    #  qui serve solo la riga che indica la fine della partecipazione alla parte di trattamento.
     #  Quella riga si trova filtrando ds_raw per le righe in cui IT.DSDECOD non è vuoto e non è uguale a "Randomized".
     disp = ds_raw[ds_raw["IT.DSDECOD"].notna() & (ds_raw["IT.DSDECOD"] != "Randomized")]
     # fine della partecipazione alla parte di trattamento è la data più recente di IT.DSSTDAT per soggetto,
