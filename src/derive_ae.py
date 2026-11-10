@@ -52,27 +52,25 @@ def derive_ae(ae_raw, dm):
 
     # converte le date in formato ISO 8601 (aaaa-mm-gg) e le assegna alle colonne AEDTC, AESTDTC, AEENDTC
     ae["AEDTC"] = a_iso(ae_raw["AEDTCOL"], "%m/%d/%Y")
-    #tiene le date complete e converte quelle; i buchi che restano (le date parziali) le riempie con il valore grezzo”.
+    # date parziali (solo anno) restano come nel grezzo, senza inventare mese e giorno
     completa = ae_raw["IT.AESTDAT"].str.len() == 10
     ae["AESTDTC"] = a_iso(ae_raw["IT.AESTDAT"].where(completa), "%m/%d/%Y").fillna(ae_raw["IT.AESTDAT"])
     # controlla se la lunghezza della stringa è 10 (formato completo) e converte solo quelle, lasciando le altre come sono.
     completa = ae_raw["IT.AEENDAT"].str.len() == 10
     ae["AEENDTC"] = a_iso(ae_raw["IT.AEENDAT"].where(completa), "%m/%d/%Y").fillna(ae_raw["IT.AEENDAT"])
 
-    # funzione per calcolare il giorno di studio a partire da una data e dalla data di screening
+    # funzione per calcolare il giorno di studio a partire da una data e dalla RFSTDTC (prima dose)
     def giorno_studio(DMDTC, RFSTDTC):
         """Calcola il giorno di studio a partire da una data e dalla data di screening."""
         giorni = (pd.to_datetime(DMDTC, format="%Y-%m-%d", errors="coerce") - pd.to_datetime(RFSTDTC, format="%Y-%m-%d", errors="coerce")).dt.days
         return giorni.where(giorni < 0, giorni + 1).astype("Int64")
 
-    #dm.set_index("USUBJID")["RFSTDTC"] trasforma DM in un dizionario “soggetto → prima dose”.
-    # Poi .map() lo attacca a ogni evento del soggetto: se 701-1302 ha 23 eventi, la sua data arriva su tutte e 23 le righe.
+    # RFSTDTC preso da DM per soggetto
     rif = ae["USUBJID"].map(dm.set_index("USUBJID")["RFSTDTC"]) #
     ae["AESTDY"] = giorno_studio(ae["AESTDTC"], rif)
     ae["AEENDY"] = giorno_studio(ae["AEENDTC"], rif)
 
-    # 
-    #AESEQ è un numero d’ordine degli eventi dentro ogni soggetto: riparte da 1 per ogni USUBJID. Serve a identificare in modo unico ogni riga, insieme a USUBJID
+    # AESEQ: numero progressivo per soggetto, eventi ordinati per data di inizio e termine
     ae = ae.sort_values(["USUBJID", "AESTDTC", "AETERM"], kind="stable")   # 1. ordina
     ae["AESEQ"] = ae.groupby("USUBJID").cumcount() + 1                     # 2. numera
     ae = ae.sort_index()                                                    # 3. rimette l'ordine originale
